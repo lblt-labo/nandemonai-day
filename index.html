@@ -110,7 +110,7 @@ label{font-size:.85rem;display:block;margin-top:14px}
 <div class="modal" id="mCard"><div class="box">
   <div class="cheki"><img id="ci" alt=""><div class="cd" id="cd"></div><div class="ct" id="ct"></div></div>
   <div class="row"><button class="sec" id="cSave">画像を保存</button><button class="pri" id="cShare">SNSでシェア</button></div>
-  <div class="row"><button class="sec" id="cEdit">編集</button><button class="sec" data-close>閉じる</button></div>
+  <div class="row"><button class="sec danger" id="cDel">削除</button><button class="sec" data-close>閉じる</button></div>
 </div></div>
 
 <div class="modal" id="mEntry"><div class="box">
@@ -130,7 +130,8 @@ label{font-size:.85rem;display:block;margin-top:14px}
   <h2>使い方</h2>
   <ol>
     <li>「今日の記録を残す」で、写真1枚と「〇〇の日」を1行だけ記録します。</li>
-    <li>記録できるのは当日分だけ。何もなかった日は空白のままでOK。</li>
+    <li>記録できるのは当日分だけ。何もなかった日は空白のままでOK。記録後の修正はできません。</li>
+    <li>記録は、カードの「削除」でいつでも消せます（確認あり）。消すとその日は空白に戻ります。</li>
     <li>日付の締め切りは、初期設定で翌朝4:00です（設定で変更可）。</li>
     <li>月間カレンダーと、1年分のモザイクで眺められます。マスをタップするとチェキ風カードが開きます。</li>
     <li>カードや月間・年間のモザイクは、「画像を保存」「SNSでシェア」から画像にできます。</li>
@@ -189,6 +190,18 @@ document.addEventListener('DOMContentLoaded', function () {
     try { if (idb) idb.transaction('r', 'readwrite').objectStore('r').put(v, k); else lsSet('nd_recs', recs); }
     catch (e) { try { lsSet('nd_recs', recs); } catch (e2) {} }
   }
+  function delRec(k) {
+    delete recs[k];
+    try { if (idb) idb.transaction('r', 'readwrite').objectStore('r')['delete'](k); else lsSet('nd_recs', recs); }
+    catch (e) { try { lsSet('nd_recs', recs); } catch (e2) {} }
+  }
+  function askDel() {
+    const k = curKey;
+    if (!k || !recs[k]) return;
+    if (confirm(fmt(k) + ' の記録を削除して、空白のマスに戻します。元に戻せません。よろしいですか？')) {
+      delRec(k); close('mCard'); render(); toast('記録を削除しました');
+    }
+  }
   function clearAll() {
     recs = {}; lsSet('nd_recs', {});
     try { if (idb) idb.transaction('r', 'readwrite').objectStore('r').clear(); } catch (e) {}
@@ -223,7 +236,8 @@ document.addEventListener('DOMContentLoaded', function () {
       $('tdD').textContent = '今日 ' + fmt(tk);
       $('tdT').textContent = r ? r.title : 'まだ記録がありません';
       $('tdTh').style.backgroundImage = r && r.th ? 'url(' + r.th + ')' : 'none';
-      $('bRec').textContent = r ? '記録を直す' : '今日の記録を残す';
+      $('bRec').textContent = r ? '記録ずみ' : '今日の記録を残す';
+      $('bRec').disabled = !!r; $('bRec').style.opacity = r ? '.5' : '1';
       $('tM').className = view === 'month' ? 'on' : '';
       $('tY').className = view === 'year' ? 'on' : '';
       const g = $('grid'); g.innerHTML = '';
@@ -260,14 +274,14 @@ document.addEventListener('DOMContentLoaded', function () {
   function showCard(k) {
     const r = recs[k]; if (!r) return; curKey = k;
     $('ci').src = r.img || r.th; $('cd').textContent = fmt(k); $('ct').textContent = r.title;
-    $('cEdit').style.display = k === todayKey() ? '' : 'none';
     open('mCard');
   }
   function openEntry() {
-    const k = todayKey(), r = recs[k];
-    pImg = r ? r.img : ''; pTh = r ? r.th : '';
+    const k = todayKey();
+    if (recs[k]) return toast('今日はもう記録ずみです。削除すると撮り直せます');
+    pImg = ''; pTh = '';
     $('eH').textContent = fmt(k) + ' の記録';
-    $('eT').value = r ? r.title : '';
+    $('eT').value = '';
     setPrev();
     open('mEntry');
   }
@@ -311,6 +325,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const t = $('eT').value.trim();
     if (!pImg) return toast('写真を1枚選んでください');
     if (!t) return toast('「〇〇の日」を1行入れてください');
+    if (recs[todayKey()]) return close('mEntry');
     putRec(todayKey(), { title: t, img: pImg, th: pTh, at: Date.now() });
     close('mEntry'); render(); toast('今日が埋まりました ✨');
   };
@@ -401,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   $('cShare').onclick = () => drawCard(curKey, (c) => out(c, 'nandemonai-' + curKey + '.png', true));
   $('cSave').onclick = () => drawCard(curKey, (c) => out(c, 'nandemonai-' + curKey + '.png', false));
-  $('cEdit').onclick = () => { close('mCard'); openEntry(); };
+  $('cDel').onclick = askDel;
   const pName = () => 'nandemonai-' + (view === 'month' ? vy + '-' + pad(vm + 1) : vy) + '.png';
   $('bSave').onclick = () => drawPoster((c) => out(c, pName(), false));
   $('bShare').onclick = () => drawPoster((c) => out(c, pName(), true));
